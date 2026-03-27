@@ -22,9 +22,10 @@
             {{ getTypeDisplay(scope.row.type) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150">
+        <el-table-column label="操作" width="200">
           <template #default="scope">
             <el-button size="small" @click="editQuestion(scope.row)">编辑</el-button>
+            <el-button size="small" type="primary" @click="copyQuestion(scope.row)">复制</el-button>
             <el-button size="small" type="danger" @click="deleteQuestion(scope.row.id)">删除</el-button>
           </template>
         </el-table-column>
@@ -319,6 +320,22 @@ export default {
       dialogVisible.value = true
     }
 
+    const copyQuestion = (question) => {
+      // 复制问题：预填所有字段，除了dimension_id
+      questionForm.value = {
+        id: null, // 新建，不设置id
+        dimension_id: '', // 所属维度留空，需要用户手动选择
+        content: question.content,
+        type: question.type || 'score_range',
+        min_score: question.min_score || 0,
+        max_score: question.max_score || 100,
+        options: question.options ? JSON.parse(JSON.stringify(question.options)) : [{ text: '', score: 0 }],
+        scoring_criteria: question.scoring_criteria || ''
+      }
+      dialogTitle.value = '创建评估问题'
+      dialogVisible.value = true
+    }
+
     const deleteQuestion = async (id) => {
       if (confirm('确定要删除这个问题吗？')) {
         try {
@@ -367,6 +384,7 @@ export default {
       saveQuestion,
       editQuestion,
       openCreateDialog,
+      copyQuestion,
       deleteQuestion,
       getDimensionLabel,
       getDimensionDisplay,
