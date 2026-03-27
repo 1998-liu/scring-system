@@ -388,6 +388,45 @@ class EvaluationController extends Controller
         return response()->json(['message' => 'Dimension deleted successfully']);
     }
 
+    public function copyDimensions(Request $request)
+    {
+        $dimensionIds = $request->input('dimension_ids', []);
+        $targetRoleId = $request->input('target_role_id');
+
+        if (empty($dimensionIds)) {
+            return response()->json(['error' => '请选择要复制的维度'], 422);
+        }
+
+        if (! $targetRoleId) {
+            return response()->json(['error' => '请选择目标角色'], 422);
+        }
+
+        // 获取目标角色信息
+        $targetRole = \App\Role::find($targetRoleId);
+        if (! $targetRole) {
+            return response()->json(['error' => '目标角色不存在'], 404);
+        }
+
+        // 删除目标角色的现有维度
+        EvaluationDimension::where('target_role_id', $targetRoleId)->delete();
+
+        // 获取要复制的维度
+        $dimensionsToCopy = EvaluationDimension::whereIn('id', $dimensionIds)->get();
+
+        // 复制维度到目标角色
+        foreach ($dimensionsToCopy as $dimension) {
+            EvaluationDimension::create([
+                'name'           => $dimension->name,
+                'description'    => $dimension->description,
+                'weight'         => $dimension->weight,
+                'target_role_id' => $targetRoleId,
+                'target_role'    => $targetRole->name,
+            ]);
+        }
+
+        return response()->json(['message' => '复制成功']);
+    }
+
     // 评估问题管理
     public function createQuestion(Request $request)
     {

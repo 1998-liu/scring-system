@@ -37,6 +37,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('dimensions', 'EvaluationController@createDimension');
     Route::get('dimensions', 'EvaluationController@getDimensions');
     Route::get('dimensions/manageable-roles', 'EvaluationController@getManageableRoles');
+    Route::post('dimensions/copy', 'EvaluationController@copyDimensions');
     Route::put('dimensions/{id}', 'EvaluationController@updateDimension');
     Route::delete('dimensions/{id}', 'EvaluationController@deleteDimension');
 

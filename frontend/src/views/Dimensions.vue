@@ -25,10 +25,16 @@
       <div class="dimensions-content">
         <div class="content-header">
           <span class="content-title">{{ selectedRole?.name }} - 评估维度</span>
-          <el-button type="primary" @click="openCreateDialog" :disabled="isAddDimensionDisabled">
-            <el-icon><Plus /></el-icon>
-            添加维度
-          </el-button>
+          <div class="header-buttons">
+            <el-button type="primary" @click="openCreateDialog" :disabled="isAddDimensionDisabled">
+              <el-icon><Plus /></el-icon>
+              添加维度
+            </el-button>
+            <el-button type="primary" @click="openCopyDimensionDialog" :disabled="isCopyDimensionDisabled">
+              <el-icon><CopyDocument /></el-icon>
+              复制维度
+            </el-button>
+          </div>
         </div>
 
         <div class="dimensions-list" v-if="currentDimensions.length > 0">
@@ -133,6 +139,46 @@
       message="确定要删除这个维度吗？"
       @confirm="confirmDeleteDimension"
     />
+
+    <!-- 选择维度弹窗 -->
+    <el-dialog v-model="selectDimensionsDialogVisible" title="选择要复制的维度" width="500px">
+      <div class="select-dimensions-content">
+        <el-checkbox-group v-model="selectedDimensionsToCopy">
+          <div v-for="dimension in currentDimensions" :key="dimension.id" class="dimension-checkbox-item">
+            <el-checkbox :label="dimension.id">
+              {{ dimension.name }} (权重: {{ dimension.weight }}%)
+            </el-checkbox>
+          </div>
+        </el-checkbox-group>
+        <el-empty v-if="currentDimensions.length === 0" description="当前角色暂无评估维度" />
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="selectDimensionsDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmSelectDimensions" :disabled="selectedDimensionsToCopy.length === 0">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 选择目标角色弹窗 -->
+    <el-dialog v-model="selectTargetRoleDialogVisible" title="选择目标角色" width="500px">
+      <div class="select-role-content">
+        <el-radio-group v-model="selectedTargetRoleId">
+          <div v-for="role in manageableRoles" :key="role.id" class="role-radio-item">
+            <el-radio :label="role.id" :disabled="role.id === selectedRole?.id">
+              {{ role.name }}
+              <span v-if="role.id === selectedRole?.id" class="current-role-tag">(当前角色)</span>
+            </el-radio>
+          </div>
+        </el-radio-group>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="selectTargetRoleDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmCopyDimensions" :disabled="!selectedTargetRoleId">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -140,7 +186,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus, Edit, Delete } from "@element-plus/icons-vue";
+import { Plus, Edit, Delete, CopyDocument } from "@element-plus/icons-vue";
 import CustomConfirmDialog from "../components/CustomConfirmDialog.vue";
 import axios from "axios";
 
@@ -150,6 +196,7 @@ export default {
     Plus,
     Edit,
     Delete,
+    CopyDocument,
     CustomConfirmDialog,
   },
   setup() {
@@ -162,6 +209,13 @@ export default {
     const dimensionFormRef = ref(null);
     const confirmDialogVisible = ref(false);
     const dimensionToDelete = ref(null);
+    
+    // 复制维度相关状态
+    const selectDimensionsDialogVisible = ref(false);
+    const selectTargetRoleDialogVisible = ref(false);
+    const selectedDimensionsToCopy = ref([]);
+    const selectedTargetRoleId = ref(null);
+    
     const dimensionForm = ref({
       id: null,
       name: "",
@@ -198,6 +252,10 @@ export default {
 
     const isAddDimensionDisabled = computed(() => {
       return totalWeight.value >= 100;
+    });
+
+    const isCopyDimensionDisabled = computed(() => {
+      return currentDimensions.value.length === 0;
     });
 
     const remainingWeight = computed(() => {
@@ -328,6 +386,88 @@ export default {
       }
     };
 
+    // 复制维度相关方法
+    const openCopyDimensionDialog = () => {
+      if (!selectedRole.value) {
+        ElMessage.warning("请先选择角色");
+        return;
+      }
+      selectedDimensionsToCopy.value = [];
+      selectDimensionsDialogVisible.value = true;
+    };
+
+    const confirmSelectDimensions = () => {
+      if (selectedDimensionsToCopy.value.length === 0) {
+        ElMessage.warning("请至少选择一个维度");
+        return;
+      }
+      selectDimensionsDialogVisible.value = false;
+      selectedTargetRoleId.value = null;
+      selectTargetRoleDialogVisible.value = true;
+    };
+
+    const confirmCopyDimensions = async () => {
+      if (!selectedTargetRoleId.value) {
+        ElMessage.warning("请选择目标角色");
+        return;
+      }
+
+      // 检查目标角色是否已有维度
+      const targetRoleDimensions = dimensions.value.filter(
+        (d) =>
+          String(d.target_role_id) === String(selectedTargetRoleId.value) ||
+          d.target_role === manageableRoles.value.find(r => r.id === selectedTargetRoleId.value)?.name
+      );
+
+      if (targetRoleDimensions.length > 0) {
+        // 目标角色已有维度，弹出确认框
+        try {
+          await ElMessageBox.confirm(
+            "目标角色已存在评估维度，复制会覆盖原有配置，是否确认继续？",
+            "确认覆盖",
+            {
+              confirmButtonText: "确认",
+              cancelButtonText: "取消",
+              type: "warning",
+            }
+          );
+          // 用户确认，执行复制
+          await executeCopyDimensions();
+        } catch {
+          // 用户取消
+          return;
+        }
+      } else {
+        // 目标角色无维度，直接复制
+        await executeCopyDimensions();
+      }
+    };
+
+    const executeCopyDimensions = async () => {
+      try {
+        const response = await axios.post(
+          "/api/dimensions/copy",
+          {
+            dimension_ids: selectedDimensionsToCopy.value,
+            target_role_id: selectedTargetRoleId.value,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+        
+        selectTargetRoleDialogVisible.value = false;
+        loadDimensions();
+        ElMessage.success("复制成功");
+      } catch (error) {
+        console.error("Failed to copy dimensions:", error);
+        const errorMessage = error.response?.data?.error || "复制失败，请重试";
+        ElMessage.error(errorMessage);
+      }
+    };
+
     onMounted(() => {
       loadManageableRoles();
       loadDimensions();
@@ -341,6 +481,7 @@ export default {
       totalWeight,
       isWeightValid,
       isAddDimensionDisabled,
+      isCopyDimensionDisabled,
       remainingWeight,
       weightSummaryClass,
       dialogVisible,
@@ -349,6 +490,10 @@ export default {
       dimensionRules,
       dimensionFormRef,
       confirmDialogVisible,
+      selectDimensionsDialogVisible,
+      selectTargetRoleDialogVisible,
+      selectedDimensionsToCopy,
+      selectedTargetRoleId,
       selectRole,
       goToRoles,
       openCreateDialog,
@@ -356,6 +501,9 @@ export default {
       saveDimension,
       deleteDimension,
       confirmDeleteDimension,
+      openCopyDimensionDialog,
+      confirmSelectDimensions,
+      confirmCopyDimensions,
     };
   },
 };
@@ -457,6 +605,11 @@ export default {
   margin-bottom: var(--spacing-lg);
   padding-bottom: var(--spacing-md);
   border-bottom: 1px solid var(--border-color);
+}
+
+.header-buttons {
+  display: flex;
+  gap: var(--spacing-sm);
 }
 
 .content-title {
@@ -700,5 +853,28 @@ export default {
     width: 100%;
     justify-content: flex-end;
   }
+}
+
+.select-dimensions-content,
+.select-role-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.dimension-checkbox-item,
+.role-radio-item {
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dimension-checkbox-item:last-child,
+.role-radio-item:last-child {
+  border-bottom: none;
+}
+
+.current-role-tag {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  margin-left: var(--spacing-xs);
 }
 </style>
