@@ -371,8 +371,8 @@ class EvaluationController extends Controller
     public function deleteDimension($id)
     {
         $dimension = EvaluationDimension::find($id);
-        
-        if (!$dimension) {
+
+        if (! $dimension) {
             return response()->json(['error' => 'Dimension not found'], 404);
         }
 
@@ -380,7 +380,7 @@ class EvaluationController extends Controller
         $questionsCount = EvaluationQuestion::where('dimension_id', $id)->count();
         if ($questionsCount > 0) {
             return response()->json([
-                'error' => '该评估维度已关联评估问题，无法删除，请先解除关联后再操作'
+                'error' => '该评估维度已关联评估问题，无法删除，请先解除关联后再操作',
             ], 422);
         }
 
@@ -397,13 +397,13 @@ class EvaluationController extends Controller
 
     public function getQuestions()
     {
-        $questions = EvaluationQuestion::with('dimension')->get();
+        $questions = EvaluationQuestion::with('dimension.targetRole')->get();
         return response()->json($questions);
     }
 
     public function getQuestionsByRole($roleId)
     {
-        $questions = EvaluationQuestion::with('dimension')
+        $questions = EvaluationQuestion::with('dimension.targetRole')
             ->whereHas('dimension', function ($query) use ($roleId) {
                 $query->where('target_role_id', $roleId);
             })
@@ -749,7 +749,7 @@ class EvaluationController extends Controller
     public function getUser($id)
     {
         $user = User::with('roles', 'roles.permissions', 'department')->find($id);
-        if (!$user) {
+        if (! $user) {
             return response()->json(['error' => 'User not found'], 404);
         }
         return response()->json($user);
