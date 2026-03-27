@@ -136,14 +136,49 @@
               v-for="(question, index) in questions" 
               :key="question.id"
               class="question-item"
-              :class="{ 'answered': evaluationForm.answers[question.id] }"
+              :class="{ 'answered': isQuestionAnswered(question) }"
             >
               <div class="question-header">
                 <span class="question-number">{{ index + 1 }}.</span>
                 <span class="question-text">{{ question.content }}</span>
                 <el-tag size="small" type="info">{{ question.dimension?.name }}</el-tag>
               </div>
-              <div class="question-options">
+              
+              <!-- 分数范围类型 -->
+              <div v-if="question.type === 'score_range'" class="question-options">
+                <div class="score-range-input">
+                  <span class="range-label">分数范围：{{ question.min_score }} ~ {{ question.max_score }}分</span>
+                  <el-input-number
+                    v-model="evaluationForm.answers[question.id].score"
+                    :min="question.min_score"
+                    :max="question.max_score"
+                    :precision="2"
+                    :step="0.5"
+                    placeholder="请输入分数"
+                    style="width: 200px;"
+                  />
+                  <span class="score-unit">分</span>
+                </div>
+              </div>
+              
+              <!-- 分数选项类型 -->
+              <div v-else-if="question.type === 'score_options'" class="question-options">
+                <el-select 
+                  v-model="evaluationForm.answers[question.id].score"
+                  placeholder="请选择评分"
+                  style="width: 100%;"
+                >
+                  <el-option
+                    v-for="option in getSortedOptions(question.options)"
+                    :key="option.score"
+                    :label="`${option.text}：${option.score}分`"
+                    :value="option.score"
+                  />
+                </el-select>
+              </div>
+              
+              <!-- 默认类型（兼容旧数据） -->
+              <div v-else class="question-options">
                 <el-rate 
                   v-model="evaluationForm.answers[question.id].score"
                   :max="100"
@@ -152,6 +187,7 @@
                   :score-template="evaluationForm.answers[question.id].score + '分'"
                 />
               </div>
+              
               <div class="question-comment">
                 <el-input 
                   v-model="evaluationForm.answers[question.id].comment"
@@ -233,7 +269,16 @@ export default {
     })
 
     const answeredCount = computed(() => {
-      return Object.values(evaluationForm.value.answers).filter(a => a.score > 0).length
+      return questions.value.filter(q => {
+        const answer = evaluationForm.value.answers[q.id]
+        if (!answer) return false
+        // 分数选项类型：score不为null即为已回答
+        if (q.type === 'score_options') {
+          return answer.score !== null && answer.score !== undefined
+        }
+        // 分数范围类型：score > 0 即为已回答
+        return answer.score > 0
+      }).length
     })
 
     const canSubmit = computed(() => {
@@ -368,8 +413,10 @@ export default {
         
         evaluationForm.value.answers = {}
         questions.value.forEach(q => {
+          // 分数选项类型默认不选中任何选项，分数范围类型默认为0
+          const defaultScore = q.type === 'score_options' ? null : 0
           evaluationForm.value.answers[q.id] = {
-            score: 0,
+            score: defaultScore,
             comment: ''
           }
         })
@@ -377,6 +424,23 @@ export default {
         console.error('Failed to load questions:', error)
         ElMessage.error('加载评估问题失败')
       }
+    }
+
+    const getSortedOptions = (options) => {
+      if (!options || !Array.isArray(options)) return []
+      // 按分数从大到小排序展示
+      return [...options].sort((a, b) => b.score - a.score)
+    }
+
+    const isQuestionAnswered = (question) => {
+      const answer = evaluationForm.value.answers[question.id]
+      if (!answer) return false
+      // 分数选项类型：score不为null即为已回答
+      if (question.type === 'score_options') {
+        return answer.score !== null && answer.score !== undefined
+      }
+      // 分数范围类型：score > 0 即为已回答
+      return answer.score > 0
     }
 
     const submitEvaluation = async () => {
@@ -446,6 +510,8 @@ export default {
       getTaskProgress,
       startEvaluation,
       loadEvaluationQuestions,
+      getSortedOptions,
+      isQuestionAnswered,
       submitEvaluation,
       viewEvaluationResult
     }
@@ -623,6 +689,23 @@ export default {
 
 .question-options {
   margin: 12px 0;
+}
+
+.score-range-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.range-label {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.score-unit {
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 .question-comment {

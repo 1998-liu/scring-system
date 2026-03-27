@@ -391,7 +391,26 @@ class EvaluationController extends Controller
     // 评估问题管理
     public function createQuestion(Request $request)
     {
-        $question = EvaluationQuestion::create($request->all());
+        $data = $request->all();
+
+        // 验证和格式化选项数据
+        if ($data['type'] === 'score_options' && isset($data['options'])) {
+            // 按分数从大到小排序选项存储
+            $options         = collect($data['options'])->sortByDesc('score')->values()->toArray();
+            $data['options'] = $options;
+
+            // 自动计算min_score和max_score
+            $scores            = collect($options)->pluck('score')->filter()->toArray();
+            $data['min_score'] = ! empty($scores) ? min($scores) : 0;
+            $data['max_score'] = ! empty($scores) ? max($scores) : 0;
+        }
+
+        // 清空不相关类型的字段
+        if ($data['type'] === 'score_range') {
+            $data['options'] = null;
+        }
+
+        $question = EvaluationQuestion::create($data);
         return response()->json($question);
     }
 
@@ -414,7 +433,26 @@ class EvaluationController extends Controller
     public function updateQuestion(Request $request, $id)
     {
         $question = EvaluationQuestion::find($id);
-        $question->update($request->all());
+        $data     = $request->all();
+
+        // 验证和格式化选项数据
+        if ($data['type'] === 'score_options' && isset($data['options'])) {
+            // 按分数从大到小排序选项存储
+            $options         = collect($data['options'])->sortByDesc('score')->values()->toArray();
+            $data['options'] = $options;
+
+            // 自动计算min_score和max_score
+            $scores            = collect($options)->pluck('score')->filter()->toArray();
+            $data['min_score'] = ! empty($scores) ? min($scores) : 0;
+            $data['max_score'] = ! empty($scores) ? max($scores) : 0;
+        }
+
+        // 清空不相关类型的字段
+        if ($data['type'] === 'score_range') {
+            $data['options'] = null;
+        }
+
+        $question->update($data);
         return response()->json($question);
     }
 

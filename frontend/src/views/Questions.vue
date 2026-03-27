@@ -17,7 +17,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="content" label="问题内容" />
-        <el-table-column prop="type" label="类型" width="100" />
+        <el-table-column label="类型" width="120">
+          <template #default="scope">
+            {{ getTypeDisplay(scope.row.type) }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="150">
           <template #default="scope">
             <el-button size="small" @click="editQuestion(scope.row)">编辑</el-button>
@@ -28,7 +32,7 @@
     </el-card>
 
     <!-- 创建/编辑问题对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle">
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form :model="questionForm" :rules="questionRules" ref="questionFormRef" label-width="100px">
         <el-form-item label="所属维度" prop="dimension_id">
           <el-select v-model="questionForm.dimension_id" placeholder="选择维度" style="width: 100%">
@@ -41,17 +45,71 @@
           </el-select>
         </el-form-item>
         <el-form-item label="问题内容" prop="content">
-          <el-input v-model="questionForm.content" type="textarea" placeholder="请输入问题内容" />
+          <el-input v-model="questionForm.content" type="textarea" placeholder="请输入问题内容" :rows="3" />
         </el-form-item>
         <el-form-item label="类型" prop="type">
-          <el-select v-model="questionForm.type" placeholder="选择类型">
-            <el-option label="单选题" value="single" />
-            <el-option label="多选题" value="multiple" />
-            <el-option label="简答题" value="text" />
+          <el-select v-model="questionForm.type" placeholder="选择类型" style="width: 100%" @change="handleTypeChange">
+            <el-option label="分数范围" value="score_range" />
+            <el-option label="分数选项" value="score_options" />
           </el-select>
         </el-form-item>
+        
+        <!-- 分数范围类型的配置 -->
+        <template v-if="questionForm.type === 'score_range'">
+          <el-form-item label="最低分" prop="min_score">
+            <el-input-number 
+              v-model="questionForm.min_score" 
+              :min="0" 
+              :precision="2" 
+              placeholder="请输入最低分"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="最高分" prop="max_score">
+            <el-input-number 
+              v-model="questionForm.max_score" 
+              :min="0" 
+              :precision="2" 
+              placeholder="请输入最高分"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </template>
+        
+        <!-- 分数选项类型的配置 -->
+        <template v-if="questionForm.type === 'score_options'">
+          <el-form-item label="选项配置">
+            <div class="options-container">
+              <div v-for="(option, index) in questionForm.options" :key="index" class="option-item">
+                <el-input 
+                  v-model="option.text" 
+                  placeholder="选项文本" 
+                  style="width: 200px; margin-right: 10px;"
+                />
+                <el-input-number 
+                  v-model="option.score" 
+                  :min="0" 
+                  :precision="2" 
+                  placeholder="分数"
+                  style="width: 120px; margin-right: 10px;"
+                />
+                <el-button 
+                  type="danger" 
+                  :icon="Delete" 
+                  circle 
+                  @click="removeOption(index)"
+                  :disabled="questionForm.options.length <= 1"
+                />
+              </div>
+              <el-button type="primary" :icon="Plus" @click="addOption" style="margin-top: 10px;">
+                添加选项
+              </el-button>
+            </div>
+          </el-form-item>
+        </template>
+        
         <el-form-item label="评分标准" prop="scoring_criteria">
-          <el-input v-model="questionForm.scoring_criteria" type="textarea" placeholder="请输入评分标准" />
+          <el-input v-model="questionForm.scoring_criteria" type="textarea" placeholder="请输入评分标准" :rows="3" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -67,13 +125,14 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Delete } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 export default {
   name: 'Questions',
   components: {
-    Plus
+    Plus,
+    Delete
   },
   setup() {
     const questions = ref([])
@@ -85,7 +144,10 @@ export default {
       id: null,
       dimension_id: '',
       content: '',
-      type: 'single',
+      type: 'score_range',
+      min_score: 0,
+      max_score: 100,
+      options: [{ text: '', score: 0 }],
       scoring_criteria: ''
     })
 
@@ -152,21 +214,69 @@ export default {
       return `${roleName}-${dimension.name}`
     }
 
+    const getTypeDisplay = (type) => {
+      const typeMap = {
+        'score_range': '分数范围',
+        'score_options': '分数选项',
+        'single': '单选题',
+        'multiple': '多选题',
+        'text': '简答题'
+      }
+      return typeMap[type] || type
+    }
+
+    const handleTypeChange = (type) => {
+      if (type === 'score_range') {
+        questionForm.value.min_score = 0
+        questionForm.value.max_score = 100
+        questionForm.value.options = null
+      } else if (type === 'score_options') {
+        questionForm.value.min_score = null
+        questionForm.value.max_score = null
+        questionForm.value.options = [{ text: '', score: 0 }]
+      }
+    }
+
+    const addOption = () => {
+      questionForm.value.options.push({ text: '', score: 0 })
+    }
+
+    const removeOption = (index) => {
+      if (questionForm.value.options.length > 1) {
+        questionForm.value.options.splice(index, 1)
+      }
+    }
+
     const saveQuestion = async () => {
       if (!questionFormRef.value) return
       
       await questionFormRef.value.validate(async (valid) => {
         if (valid) {
+          // 验证分数范围类型
+          if (questionForm.value.type === 'score_range') {
+            if (questionForm.value.min_score >= questionForm.value.max_score) {
+              ElMessage.error('最低分必须小于最高分')
+              return
+            }
+          }
+          
+          // 验证分数选项类型
+          if (questionForm.value.type === 'score_options') {
+            const validOptions = questionForm.value.options.filter(opt => opt.text && opt.score !== undefined)
+            if (validOptions.length < 2) {
+              ElMessage.error('请至少添加2个有效选项')
+              return
+            }
+          }
+          
           try {
             if (questionForm.value.id) {
-              // 编辑问题
               await axios.put(`/api/questions/${questionForm.value.id}`, questionForm.value, {
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
               })
             } else {
-              // 创建问题
               await axios.post('/api/questions', questionForm.value, {
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -176,6 +286,7 @@ export default {
             dialogVisible.value = false
             loadQuestions()
             resetForm()
+            ElMessage.success('保存成功')
           } catch (error) {
             console.error('Failed to save question:', error)
             ElMessage.error('保存失败，请重试')
@@ -185,7 +296,6 @@ export default {
     }
 
     const editQuestion = (question) => {
-      // 确保dimension_id是数字类型，与el-option的value类型一致
       const dimensionId = question.dimension_id 
         ? Number(question.dimension_id) 
         : (question.dimension ? Number(question.dimension.id) : '')
@@ -194,8 +304,11 @@ export default {
         id: question.id,
         dimension_id: dimensionId,
         content: question.content,
-        type: question.type,
-        scoring_criteria: question.scoring_criteria
+        type: question.type || 'score_range',
+        min_score: question.min_score || 0,
+        max_score: question.max_score || 100,
+        options: question.options || [{ text: '', score: 0 }],
+        scoring_criteria: question.scoring_criteria || ''
       }
       dialogTitle.value = '编辑评估问题'
       dialogVisible.value = true
@@ -215,6 +328,7 @@ export default {
             }
           })
           loadQuestions()
+          ElMessage.success('删除成功')
         } catch (error) {
           console.error('Failed to delete question:', error)
           ElMessage.error('删除失败，请重试')
@@ -227,7 +341,10 @@ export default {
         id: null,
         dimension_id: '',
         content: '',
-        type: 'single',
+        type: 'score_range',
+        min_score: 0,
+        max_score: 100,
+        options: [{ text: '', score: 0 }],
         scoring_criteria: ''
       }
       dialogTitle.value = '创建评估问题'
@@ -252,7 +369,13 @@ export default {
       openCreateDialog,
       deleteQuestion,
       getDimensionLabel,
-      getDimensionDisplay
+      getDimensionDisplay,
+      getTypeDisplay,
+      handleTypeChange,
+      addOption,
+      removeOption,
+      Plus,
+      Delete
     }
   }
 }
@@ -310,5 +433,15 @@ export default {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-sm);
+}
+
+.options-container {
+  width: 100%;
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
 }
 </style>
