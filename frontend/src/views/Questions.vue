@@ -185,7 +185,18 @@ export default {
     }
 
     const editQuestion = (question) => {
-      questionForm.value = { ...question }
+      // 确保dimension_id是数字类型，与el-option的value类型一致
+      const dimensionId = question.dimension_id 
+        ? Number(question.dimension_id) 
+        : (question.dimension ? Number(question.dimension.id) : '')
+      
+      questionForm.value = {
+        id: question.id,
+        dimension_id: dimensionId,
+        content: question.content,
+        type: question.type,
+        scoring_criteria: question.scoring_criteria
+      }
       dialogTitle.value = '编辑评估问题'
       dialogVisible.value = true
     }
