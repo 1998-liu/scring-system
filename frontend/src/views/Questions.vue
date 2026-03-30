@@ -10,7 +10,7 @@
     
     <el-card class="content-card">
       <el-table :data="questions" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column type="index" label="序号" width="80" :index="indexMethod" />
         <el-table-column label="所属维度" width="200">
           <template #default="scope">
             {{ getDimensionDisplay(scope.row.dimension) }}
@@ -30,6 +30,18 @@
           </template>
         </el-table-column>
       </el-table>
+      
+      <div class="pagination-container">
+        <el-pagination
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
     </el-card>
 
     <!-- 创建/编辑问题对话框 -->
@@ -152,6 +164,12 @@ export default {
       scoring_criteria: ''
     })
 
+    const pagination = ref({
+      currentPage: 1,
+      pageSize: 10,
+      total: 0
+    })
+
     const questionRules = {
       dimension_id: [
         { required: true, message: '请选择所属维度', trigger: 'change' }
@@ -167,11 +185,16 @@ export default {
     const loadQuestions = async () => {
       try {
         const response = await axios.get('/api/questions', {
+          params: {
+            page: pagination.value.currentPage,
+            page_size: pagination.value.pageSize
+          },
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
         })
-        questions.value = response.data
+        questions.value = response.data.data
+        pagination.value.total = response.data.total
       } catch (error) {
         console.error('Failed to load questions:', error)
       }
@@ -367,6 +390,21 @@ export default {
       dialogTitle.value = '创建评估问题'
     }
 
+    const handleSizeChange = (val) => {
+      pagination.value.pageSize = val
+      pagination.value.currentPage = 1
+      loadQuestions()
+    }
+
+    const handleCurrentChange = (val) => {
+      pagination.value.currentPage = val
+      loadQuestions()
+    }
+
+    const indexMethod = (index) => {
+      return (pagination.value.currentPage - 1) * pagination.value.pageSize + index + 1
+    }
+
     onMounted(() => {
       loadQuestions()
       loadDimensions()
@@ -380,6 +418,7 @@ export default {
       questionForm,
       questionRules,
       questionFormRef,
+      pagination,
       loadQuestions,
       saveQuestion,
       editQuestion,
@@ -392,6 +431,9 @@ export default {
       handleTypeChange,
       addOption,
       removeOption,
+      handleSizeChange,
+      handleCurrentChange,
+      indexMethod,
       Plus,
       Delete
     }
@@ -461,5 +503,13 @@ export default {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
 }
 </style>

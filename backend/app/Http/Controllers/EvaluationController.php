@@ -453,10 +453,25 @@ class EvaluationController extends Controller
         return response()->json($question);
     }
 
-    public function getQuestions()
+    public function getQuestions(Request $request)
     {
-        $questions = EvaluationQuestion::with('dimension.targetRole')->get();
-        return response()->json($questions);
+        $page = $request->input('page', 1);
+        $pageSize = $request->input('page_size', 10);
+        
+        $query = EvaluationQuestion::with('dimension.targetRole');
+        
+        $total = $query->count();
+        $questions = $query->offset(($page - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+        
+        return response()->json([
+            'data' => $questions,
+            'total' => $total,
+            'current_page' => $page,
+            'per_page' => $pageSize,
+            'last_page' => ceil($total / $pageSize),
+        ]);
     }
 
     public function getQuestionsByRole($roleId)
