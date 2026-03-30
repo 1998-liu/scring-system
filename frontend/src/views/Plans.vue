@@ -11,7 +11,7 @@
         </div>
       </template>
       <el-table :data="formattedPlans" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column type="index" label="序号" width="80" :index="indexMethod" />
         <el-table-column prop="name" label="计划名称" />
         <el-table-column label="开始日期" width="200">
           <template #default="scope">{{
@@ -53,6 +53,18 @@
           </template>
         </el-table-column>
       </el-table>
+      
+      <div class="pagination-container">
+        <el-pagination
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
     </el-card>
 
     <!-- 创建/编辑计划对话框 -->
@@ -135,6 +147,12 @@ export default {
     const confirmDialogVisible = ref(false);
     const planIdToDelete = ref(null);
 
+    const pagination = ref({
+      currentPage: 1,
+      pageSize: 10,
+      total: 0
+    });
+
     // 格式化日期时间为中文显示
     const formatDateTime = (dateString) => {
       if (!dateString) return "";
@@ -182,12 +200,17 @@ export default {
         const token = localStorage.getItem("token");
         console.log("使用token:", token);
         const response = await axios.get("/api/plans", {
+          params: {
+            page: pagination.value.currentPage,
+            page_size: pagination.value.pageSize
+          },
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
         console.log("计划列表加载成功:", response.data);
-        plans.value = response.data;
+        plans.value = response.data.data;
+        pagination.value.total = response.data.total;
       } catch (error) {
         console.error("Failed to load plans:", error);
         console.error("Error response:", error.response);
@@ -320,6 +343,21 @@ export default {
       dialogTitle.value = "创建评估计划";
     };
 
+    const handleSizeChange = (val) => {
+      pagination.value.pageSize = val;
+      pagination.value.currentPage = 1;
+      loadPlans();
+    };
+
+    const handleCurrentChange = (val) => {
+      pagination.value.currentPage = val;
+      loadPlans();
+    };
+
+    const indexMethod = (index) => {
+      return (pagination.value.currentPage - 1) * pagination.value.pageSize + index + 1;
+    };
+
     onMounted(() => {
       loadPlans();
     });
@@ -332,6 +370,7 @@ export default {
       planForm,
       planRules,
       planFormRef,
+      pagination,
       confirmDialogVisible,
       loadPlans,
       savePlan,
@@ -339,6 +378,9 @@ export default {
       deletePlan,
       confirmDeletePlan,
       updatePlanStatus,
+      handleSizeChange,
+      handleCurrentChange,
+      indexMethod,
     };
   },
 };
@@ -396,5 +438,13 @@ export default {
   background-color: #fab6b6 !important;
   border-color: #fab6b6 !important;
   color: #ffffff !important;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
 }
 </style>

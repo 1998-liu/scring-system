@@ -24,10 +24,25 @@ class EvaluationController extends Controller
         return response()->json($plan);
     }
 
-    public function getPlans()
+    public function getPlans(Request $request)
     {
-        $plans = EvaluationPlan::all();
-        return response()->json($plans);
+        $page = $request->input('page', 1);
+        $pageSize = $request->input('page_size', 10);
+        
+        $query = EvaluationPlan::query();
+        
+        $total = $query->count();
+        $plans = $query->offset(($page - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+        
+        return response()->json([
+            'data' => $plans,
+            'total' => $total,
+            'current_page' => $page,
+            'per_page' => $pageSize,
+            'last_page' => ceil($total / $pageSize),
+        ]);
     }
 
     public function getPlan($id)
