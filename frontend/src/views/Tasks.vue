@@ -11,7 +11,7 @@
         </div>
       </template>
       <el-table :data="formattedTasks" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column type="index" label="序号" width="80" :index="indexMethod" />
         <el-table-column label="评估者" width="200">
           <template #default="scope">
             {{ scope.row.evaluators && scope.row.evaluators.length > 0 ? scope.row.evaluators.map(e => e.name).join(', ') : '-' }}
@@ -64,6 +64,18 @@
           </template>
         </el-table-column>
       </el-table>
+      
+      <div class="pagination-container">
+        <el-pagination
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
     </el-card>
 
     <!-- 创建/编辑任务对话框 -->
@@ -155,6 +167,12 @@ export default {
     })
     let deleteTaskId = ref(null)
 
+    const pagination = ref({
+      currentPage: 1,
+      pageSize: 10,
+      total: 0
+    })
+
     // 状态中文映射
     const statusMap = {
       pending: '待开始',
@@ -245,12 +263,17 @@ export default {
     const loadTasks = async () => {
       try {
         const response = await axios.get('/api/tasks', {
+          params: {
+            page: pagination.value.currentPage,
+            page_size: pagination.value.pageSize
+          },
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
         })
         console.log('后端返回的任务数据:', response.data)
-        tasks.value = response.data
+        tasks.value = response.data.data
+        pagination.value.total = response.data.total
       } catch (error) {
         console.error('Failed to load tasks:', error)
       }
@@ -522,6 +545,21 @@ export default {
       dialogTitle.value = '创建评估任务'
     }
 
+    const handleSizeChange = (val) => {
+      pagination.value.pageSize = val
+      pagination.value.currentPage = 1
+      loadTasks()
+    }
+
+    const handleCurrentChange = (val) => {
+      pagination.value.currentPage = val
+      loadTasks()
+    }
+
+    const indexMethod = (index) => {
+      return (pagination.value.currentPage - 1) * pagination.value.pageSize + index + 1
+    }
+
     const openCreateTaskDialog = () => {
       // 重置表单数据
       resetForm()
@@ -548,13 +586,17 @@ export default {
       taskForm,
       taskRules,
       taskFormRef,
+      pagination,
       loadTasks,
       saveTask,
       editTask,
       deleteTask,
       confirmDeleteTask,
       updateTaskStatus,
-      openCreateTaskDialog
+      openCreateTaskDialog,
+      handleSizeChange,
+      handleCurrentChange,
+      indexMethod
     }
   }
 }
@@ -612,5 +654,13 @@ export default {
   background-color: #fab6b6 !important;
   border-color: #fab6b6 !important;
   color: #ffffff !important;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
 }
 </style>

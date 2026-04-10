@@ -127,10 +127,25 @@ class EvaluationController extends Controller
         }
     }
 
-    public function getTasks()
+    public function getTasks(Request $request)
     {
-        $tasks = EvaluationTask::with(['evaluators', 'evaluatees', 'plan'])->get();
-        return response()->json($tasks);
+        $page = $request->input('page', 1);
+        $pageSize = $request->input('page_size', 10);
+        
+        $query = EvaluationTask::with(['evaluators', 'evaluatees', 'plan']);
+        
+        $total = $query->count();
+        $tasks = $query->offset(($page - 1) * $pageSize)
+            ->limit($pageSize)
+            ->get();
+        
+        return response()->json([
+            'data' => $tasks,
+            'total' => $total,
+            'current_page' => $page,
+            'per_page' => $pageSize,
+            'last_page' => ceil($total / $pageSize),
+        ]);
     }
 
     public function getTask($id)
